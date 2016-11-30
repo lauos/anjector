@@ -1,6 +1,6 @@
 # Anjector 
 
-Stand for *Android Injector*, a framework to inject a shared library into other process. 
+**Android Injector**, a framework to inject a shared library into other process. 
 
 # Usage
 

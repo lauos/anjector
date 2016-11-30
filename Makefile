@@ -34,7 +34,7 @@ test:
 	adb push $(CURDIR)/libs/$(ABI)/tracee_epoll /data/local/tmp
 	adb push $(CURDIR)/libs/$(ABI)/tracee_select_timeout /data/local/tmp
 	adb push $(CURDIR)/libs/$(ABI)/tracee_epoll_timeout /data/local/tmp
-	#adb shell /data/local/tmp/anjector_test 
+	adb shell /data/local/tmp/anjector_test 
 	
 clean:
 	rm -rf libs obj
