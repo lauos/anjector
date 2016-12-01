@@ -1,3 +1,10 @@
+/*
+ * ptrace_arch.c
+ * Copyright (C) 2016 Gavin Liu <lbliuyun@gmail.com>
+ *
+ * Distributed under terms of the MIT license.
+ */
+
 #include <stdio.h>
 #include <sys/syscall.h>
 
@@ -56,13 +63,13 @@ int arch_do_with_interrupt(pid_t pid, regs_t *regs){
         case -ERESTARTSYS:
         case -ERESTARTNOHAND:
         case -ERESTARTNOINTR:
-            LOGD("[+] syscall %ld interruped, do something with the interrupt\n",
+            LOGD("[+] syscall %ld interruped, restart automatic\n",
                     arch_get_syscall_no(pid, regs));
             regs->rax = regs->orig_rax;
             regs->rip -= 2;
             break;
         case -ERESTART_RESTARTBLOCK:
-            LOGD("[+] syscall %ld interruped, do something with the interrupt\n",
+            LOGD("[+] syscall %ld interruped, use restart_syscall to restart\n",
                     arch_get_syscall_no(pid, regs));
             regs->rax = __NR_restart_syscall;
             regs->rip -= 2;

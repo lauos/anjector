@@ -1,3 +1,10 @@
+/*
+ * main.c
+ * Copyright (C) 2016 Gavin Liu <lbliuyun@gmail.com>
+ *
+ * Distributed under terms of the MIT license.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -16,12 +23,11 @@ int main(int argc, char* argv[]){
     }
 
     current_pid = get_current_pid();
-    current_name = find_process_by_pid(current_pid);
-
     target_pid = get_target_pid();
     target_name = get_target_name();
     entry_name = get_bridge_entry();
     bridge_path = get_bridge_path();
+    current_name = find_process_by_pid(current_pid);
 
     if(0 != do_inject_process(target_pid, bridge_path, entry_name)){
         LOGE("[+] [%s](%d) inject [%s] into process [%s](%d) failed!\n",
@@ -32,8 +38,7 @@ int main(int argc, char* argv[]){
     }
 
     if(NULL != current_name){
-        free(current_name);
-        current_name = NULL;
+        free(current_name); current_name = NULL;
     }
 
     return 0;

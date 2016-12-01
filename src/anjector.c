@@ -1,3 +1,10 @@
+/*
+ * anjector.c
+ * Copyright (C) 2016 Gavin Liu <lbliuyun@gmail.com>
+ *
+ * Distributed under terms of the MIT license.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -123,6 +130,8 @@ static int call_bridge_entry(pid_t pid, regs_t *regs, void* handle,
 
 static int do_ptrace_attach(pid_t pid, regs_t *regs){
     int ret = -1;
+    long stop_pc;
+    char* stop_module;
 
     do{
         //Attach process
@@ -136,10 +145,10 @@ static int do_ptrace_attach(pid_t pid, regs_t *regs){
 
         ptrace_get_regs(pid, regs);
         dump_all_regs(regs);
-
-        LOGD("[+] get next ins addr %lx\n", get_next_ins_addr(regs));
-        char* stop = get_module_name(pid, (void*)get_next_ins_addr(regs));
-        LOGD("[+] attached, stop at = %s[%lx]\n", stop, (long)get_module_base(pid, stop));
+        
+        stop_pc = get_next_ins_addr(regs);
+        stop_module = get_module_name(pid, (void*)get_next_ins_addr(regs));
+        LOGD("[+] attached, stop pc = %lx, module = %s [%lx]\n", stop_pc, stop_module, (long)get_module_base(pid, stop_module));
 
         // Attached during the syscall, possible interrupt 
         if(0 != do_with_interrupt(pid, regs)){
@@ -156,9 +165,10 @@ int do_inject_process(pid_t pid, const char* path, const char* entry){
     int ret = -1;
     regs_t orig_regs = {0};
     regs_t regs = {0};
-    void *remote_dlopen_ptr, *remote_dlsym_ptr, *remote_dlclose_ptr;
-    void *dlopen_handle, *space_base;
+    void *remote_dlopen_ptr, *remote_dlsym_ptr, *remote_dlerror_ptr,*remote_dlclose_ptr;
+    void *dlopen_handle, *space_base, *error_msg;
     void *param[2]= {0};
+    char error_buf[128] = {0};
     do{
         if(pid <= 0 || NULL == path || '\0' == path[0]){
             break;
@@ -175,6 +185,7 @@ int do_inject_process(pid_t pid, const char* path, const char* entry){
         // 3. Get the function address in target process
         remote_dlopen_ptr = get_remote_addr(pid, (void*)dlopen);
         remote_dlsym_ptr = get_remote_addr(pid, (void*)dlsym);
+        remote_dlerror_ptr = get_remote_addr(pid, (void*)dlerror);
         remote_dlclose_ptr = get_remote_addr(pid, (void*)dlclose);
 
         LOGD("[+] remote dlopen addr : %lx\n", (long)remote_dlopen_ptr);
@@ -182,7 +193,7 @@ int do_inject_process(pid_t pid, const char* path, const char* entry){
         LOGD("[+] remote dlclose addr : %lx\n", (long)remote_dlclose_ptr);
 
         if(NULL == remote_dlopen_ptr || NULL == remote_dlclose_ptr 
-                || NULL == remote_dlsym_ptr){
+                || NULL == remote_dlsym_ptr || NULL == remote_dlerror_ptr){
             LOGE("[+] get remote addr failed\n");
             break;
         }
@@ -202,12 +213,25 @@ int do_inject_process(pid_t pid, const char* path, const char* entry){
         param[0] = space_base;
         param[1] = (void*)RTLD_NOW;
         if(0 != ptrace_call_wrapper(pid, &regs, remote_dlopen_ptr, param, 2, &dlopen_handle)){
-            LOGE("[+] dlopen failed\n");
+            LOGE("[+] call dlopen failed\n");
             break;
         }
 
         if(NULL == dlopen_handle){
-            LOGE("[+] dlopen failed\n");
+            LOGE("[+] dlopen failed, try to call dlerror get error msg\n");
+            if(0 != ptrace_call_wrapper(pid, &regs, remote_dlerror_ptr, param, 0, &error_msg)){
+                LOGE("[+] call dlerror failed\n");
+                break;
+            }
+            if(NULL == error_msg){
+                LOGE("[+] dlerror failed\n");
+                break;
+            }
+
+            if(0 != ptrace_read_data(pid, error_buf, error_msg, 128)){
+                LOGD("[+] dlopen failed : %s\n", error_buf);
+            }
+
             break;
         }
         

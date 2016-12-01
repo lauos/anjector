@@ -1,3 +1,10 @@
+/*
+ * proc_utils.c
+ * Copyright (C) 2016 Gavin Liu <lbliuyun@gmail.com>
+ *
+ * Distributed under terms of the MIT license.
+ */
+
 #include <stdio.h>
 #include <stdlib.h> // For strtoul
 #include <string.h>

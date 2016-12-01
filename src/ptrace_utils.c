@@ -1,3 +1,10 @@
+/*
+ * ptrace_utils.c
+ * Copyright (C) 2016 Gavin Liu <lbliuyun@gmail.com>
+ *
+ * Distributed under terms of the MIT license.
+ */
+
 #include <string.h>
 #include <errno.h>
 
@@ -32,31 +39,30 @@ int do_with_interrupt(pid_t pid, regs_t* regs){
 }
 
 int wait_for_signal(pid_t pid, int signo){
-    int status;
+    int status, ret_sig = 0;
     if(pid != waitpid(pid, &status, WUNTRACED)){
         LOGE("[PTRACE] wait for signal failed\n");
         return -1;
     }
 
     if (WIFEXITED(status)){
-        if(WEXITSTATUS(status) != signo){
-            LOGE("[PTRACE] get signal %d, but need %d\n", WEXITSTATUS(status), signo);
-            return -1;
-        }
+        ret_sig = WEXITSTATUS(status);
+        LOGD("[PTRACE] target exit, sig = %d(%s)\n", ret_sig, strsignal(ret_sig));
     } else if (WIFSIGNALED(status)){
-        if(WTERMSIG(status) != signo){
-            LOGE("[PTRACE] get signal %d, but need %d\n", WTERMSIG(status), signo);
-            return -1;
-        }
+        ret_sig = WTERMSIG(status);
+        LOGD("[PTRACE] target terminate, sig = %d(%s)\n", ret_sig, strsignal(ret_sig));
     } else if (WIFSTOPPED(status)){
-        if(WSTOPSIG(status) != signo){
-            LOGE("[PTRACE] get signal %d, but need %d\n", WSTOPSIG(status), signo);
-            ptrace_continue(pid, 0);
-        }
+        ret_sig = WSTOPSIG(status);
+        LOGD("[PTRACE] target stop, sig = %d(%s)\n", ret_sig, strsignal(ret_sig));
     } else {
-        LOGE("[PTRACE] something error\n");
+        LOGE("[PTRACE] target occur unknown error\n");
+    }
+
+    if(ret_sig == 0 || ret_sig != signo){
+        LOGE("[PTRACE] get signal %d, but need %d\n", ret_sig, signo);
         return -1;
     }
+    
     return 0;
 }
 
@@ -233,39 +239,53 @@ int ptrace_invoke_syscall(pid_t pid, regs_t* regs, long syscall, void** args, si
     if(ptrace_set_regs(pid, regs) == -1){
         return -1;
     }
-    if(ptrace_continue(pid, 0) == -1){
-        return -1;
-    }
+
+    // wait for signal until get SIGSEGV
+    do{
+        if(ptrace_continue(pid, 0) == -1){
+            return -1;
+        }
  
-    if(wait_for_signal(pid, SIGSEGV) == -1){
-        return -1;
-    }
+        if(wait_for_signal(pid, SIGSEGV) == 0){
+            return 0;
+        }
+    } while(1);
+
     return 0;
 }
 
 int ptrace_call_func(pid_t pid, regs_t* regs, void* addr, void** args, size_t nargs){
-    if(0 != arch_set_params(pid, regs, args, nargs)){
-        LOGE("[PTRACE] set params error (%d) : %s\n", errno, strerror(errno));
-        return -1;
-    }
+    int ret = -1;
+    do{
+        if(0 != arch_set_params(pid, regs, args, nargs)){
+            LOGE("[PTRACE] set params error (%d) : %s\n", errno, strerror(errno));
+            break;
+        }
 
-    if(0 != arch_set_next_and_ret_addr(pid, regs, addr)){
-        LOGE("[PTRACE] set next and ret addr error (%d) : %s\n", errno, strerror(errno));
-        return -1;
-    }
+        if(0 != arch_set_next_and_ret_addr(pid, regs, addr)){
+            LOGE("[PTRACE] set next and ret addr error (%d) : %s\n", errno, strerror(errno));
+            break;
+        }
+        
+        // dump_all_regs(regs);
 
-    // dump_all_regs(regs);
+        if(ptrace_set_regs(pid, regs) != 0){
+            break;
+        }
 
-    if(ptrace_set_regs(pid, regs) == -1){
-        return -1;
-    }
-    if(ptrace_continue(pid, 0) == -1){
-        return -1;
-    }
+        // wait for signal until get SIGSEGV
+        do{
+            if(ptrace_continue(pid, 0) != 0){
+                break;
+            }
  
-    if(wait_for_signal(pid, SIGSEGV) == -1){
-        return -1;
-    }
-    return 0;
+            if(wait_for_signal(pid, SIGSEGV) == 0){
+                ret = 0;
+                break;
+            }
+        } while(1);
+    } while(0);
+
+    return ret;
 }
 

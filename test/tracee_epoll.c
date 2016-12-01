@@ -37,7 +37,6 @@ int main(int argc, char*argv[]){
             printf("[TRACEE] Accept\n");
         }
     }
-    while(1){printf("[TRACEE] Timeout!\n");}
 
 	return 0;
 }

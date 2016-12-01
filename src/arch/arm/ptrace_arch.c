@@ -1,3 +1,10 @@
+/*
+ * ptrace_arch.c
+ * Copyright (C) 2016 Gavin Liu <lbliuyun@gmail.com>
+ *
+ * Distributed under terms of the MIT license.
+ */
+
 #include <stdio.h>
 #include <errno.h>
 #include <sys/syscall.h>
